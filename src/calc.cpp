@@ -3,6 +3,7 @@
 #include <cctype>   // for std::isspace
 #include <cmath>    // various math functions
 #include <iostream> // for error reporting via std::cerr
+#include <sstream>
 
 namespace {
 
@@ -208,32 +209,56 @@ double binary(const Op op, const double left, const double right)
 
 } // anonymous namespace
 
-double process_line(const double current, const std::string & line)
+double left_convolutional(double current, const std::string & line)
 {
-    std::size_t i = 0;
-    const auto op = parse_op(line, i);
-    switch (arity(op)) {
-    case 2: {
-        i = skip_ws(line, i);
-        const auto old_i = i;
-        const auto arg = parse_arg(line, i);
-        if (i == old_i) {
-            std::cerr << "No argument for a binary operation" << std::endl;
-            break;
-        }
-        else if (i < line.size()) {
-            break;
-        }
-        return binary(op, current, arg);
+    std::size_t pos_binary_op = 1;
+    const auto op = parse_op(line, pos_binary_op);
+    if (arity(op) != 2) {
+        std::cerr << "Left convolutional is work only binary opertion" << std::endl;
+        exit(1);
     }
-    case 1: {
-        if (i < line.size()) {
-            std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
-            break;
-        }
-        return unary(current, op);
-    }
-    default: break;
+    const auto lineArg = line.substr(4);
+    std::stringstream newLine(lineArg);
+    std::string number;
+    std::getline(newLine, number, ' ');
+    // current = std::stod(number);
+    while (std::getline(newLine, number, ' ')) {
+        current = binary(op, current, std::stod(number));
     }
     return current;
+}
+
+double process_line(const double current, const std::string & line)
+{
+    if ((line[0] == '(') && (line[2] == ')')) {
+        return left_convolutional(current, line);
+    }
+    else {
+        std::size_t i = 0;
+        const auto op = parse_op(line, i);
+        switch (arity(op)) {
+        case 2: {
+            i = skip_ws(line, i);
+            const auto old_i = i;
+            const auto arg = parse_arg(line, i);
+            if (i == old_i) {
+                std::cerr << "No argument for a binary operation" << std::endl;
+                break;
+            }
+            else if (i < line.size()) {
+                break;
+            }
+            return binary(op, current, arg);
+        }
+        case 1: {
+            if (i < line.size()) {
+                std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
+                break;
+            }
+            return unary(current, op);
+        }
+        default: break;
+        }
+        return current;
+    }
 }

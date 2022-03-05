@@ -209,7 +209,7 @@ double binary(const Op op, const double left, const double right)
 
 } // anonymous namespace
 
-double left_convolutional(double current, const std::string & line)
+double left_fold(double current, const std::string & line)
 {
     std::size_t pos_binary_op = 1;
     const auto op = parse_op(line, pos_binary_op);
@@ -231,7 +231,7 @@ double left_convolutional(double current, const std::string & line)
 double process_line(const double current, const std::string & line)
 {
     if ((line[0] == '(') && (line[2] == ')')) {
-        return left_convolutional(current, line);
+        return left_fold(current, line);
     }
     else {
         std::size_t i = 0;

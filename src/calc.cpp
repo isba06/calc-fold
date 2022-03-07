@@ -107,12 +107,12 @@ std::size_t skip_ws(const std::string & line, std::size_t i)
     return i;
 }
 
-double parse_arg(const std::string & line, std::size_t & i)
+double parse_arg(const std::string & line, std::size_t & i, bool & good)
 {
     double res = 0;
     std::size_t count = 0;
-    bool good = true;
     bool integer = true;
+    good = true;
     double fraction = 1;
     while (good && i < line.size() && count < max_decimal_digits) {
         switch (line[i]) {
@@ -173,8 +173,9 @@ double unary(const double current, const Op op)
     }
 }
 
-double binary(const Op op, const double left, const double right)
+double binary(const Op op, const double left, const double right, bool & good)
 {
+    good = true;
     switch (op) {
     case Op::SET:
         return right;
@@ -189,6 +190,7 @@ double binary(const Op op, const double left, const double right)
             return left / right;
         }
         else {
+            good = false;
             std::cerr << "Bad right argument for division: " << right << std::endl;
             return left;
         }
@@ -197,6 +199,7 @@ double binary(const Op op, const double left, const double right)
             return std::fmod(left, right);
         }
         else {
+            good = false;
             std::cerr << "Bad right argument for remainder: " << right << std::endl;
             return left;
         }
@@ -209,21 +212,59 @@ double binary(const Op op, const double left, const double right)
 
 } // anonymous namespace
 
+std::size_t skip_brackets(const std::string & line, std::size_t i)
+{
+    while (i < line.size()) {
+        i++;
+        if (line[i] == ')') {
+            i++;
+            break;
+        }
+    }
+    return i;
+}
+
+std::size_t parse_number(const std::string & line, std::size_t i)
+{
+    size_t count = 0;
+    while (i < line.size() && !std::isspace(line[i])) {
+        i++;
+        count++;
+    }
+    return count;
+}
+
 double left_fold(double current, const std::string & line)
 {
+    const auto old_current = current;
+    std::size_t i = 0;
     std::size_t pos_binary_op = 1;
+    bool good;
     const auto op = parse_op(line, pos_binary_op);
-    if (arity(op) != 2) {
+    if ((arity(op) != 2) || (op == Op::SET)) {
         std::cerr << "Left convolutional is work only binary opertion" << std::endl;
-        exit(1);
+        return current;
     }
-    const auto lineArg = line.substr(4);
-    std::stringstream newLine(lineArg);
-    std::string number;
-    std::getline(newLine, number, ' ');
-    // current = std::stod(number);
-    while (std::getline(newLine, number, ' ')) {
-        current = binary(op, current, std::stod(number));
+    i = skip_brackets(line, i);
+    i = skip_ws(line, i);
+    if (i == line.size()) {
+        std::cerr << "No arguments" << std::endl;
+        return current;
+    }
+    while (i < line.size()) {
+        const auto number_size = parse_number(line, i);
+        std::size_t pos = 0;
+        const auto arg = parse_arg(line.substr(i, number_size), pos, good);
+        if (!good) {
+            std::cerr << "Wrong arguments" << std::endl;
+            return old_current;
+        }
+        current = binary(op, current, arg, good);
+        if (!good) {
+            return old_current;
+        }
+        i += number_size;
+        i = skip_ws(line, i);
     }
     return current;
 }
@@ -240,7 +281,8 @@ double process_line(const double current, const std::string & line)
         case 2: {
             i = skip_ws(line, i);
             const auto old_i = i;
-            const auto arg = parse_arg(line, i);
+            bool good;
+            const auto arg = parse_arg(line, i, good);
             if (i == old_i) {
                 std::cerr << "No argument for a binary operation" << std::endl;
                 break;
@@ -248,7 +290,7 @@ double process_line(const double current, const std::string & line)
             else if (i < line.size()) {
                 break;
             }
-            return binary(op, current, arg);
+            return binary(op, current, arg, good);
         }
         case 1: {
             if (i < line.size()) {

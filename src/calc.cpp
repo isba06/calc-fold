@@ -3,8 +3,7 @@
 #include <cctype>   // for std::isspace
 #include <cmath>    // various math functions
 #include <iostream> // for error reporting via std::cerr
-#include <sstream>
-
+#include <vector>
 namespace {
 
 const std::size_t max_decimal_digits = 10;
@@ -63,6 +62,13 @@ Op parse_op(const std::string & line, std::size_t & i)
     case '9':
         --i; // a first digit is a part of op's argument
         return Op::SET;
+    case '(':
+        if (line[2] == ')') {
+            return parse_op(line, i);
+        }
+        else {
+            rollback(1);
+        }
     case '+':
         return Op::ADD;
     case '-':
@@ -112,7 +118,6 @@ double parse_arg(const std::string & line, std::size_t & i, bool & good)
     double res = 0;
     std::size_t count = 0;
     bool integer = true;
-    good = true;
     double fraction = 1;
     while (good && i < line.size() && count < max_decimal_digits) {
         switch (line[i]) {
@@ -150,6 +155,7 @@ double parse_arg(const std::string & line, std::size_t & i, bool & good)
         std::cerr << "Argument parsing error at " << i << ": '" << line.substr(i) << "'" << std::endl;
     }
     else if (i < line.size()) {
+        good = false;
         std::cerr << "Argument isn't fully parsed, suffix left: '" << line.substr(i) << "'" << std::endl;
     }
     return res;
@@ -175,7 +181,6 @@ double unary(const double current, const Op op)
 
 double binary(const Op op, const double left, const double right, bool & good)
 {
-    good = true;
     switch (op) {
     case Op::SET:
         return right;
@@ -214,19 +219,21 @@ double binary(const Op op, const double left, const double right, bool & good)
 
 std::size_t skip_brackets(const std::string & line, std::size_t i)
 {
-    while (i < line.size()) {
-        i++;
-        if (line[i] == ')') {
-            i++;
-            break;
-        }
+    if (line[0] == '(' && line[2] == ')') {
+        return 3;
     }
-    return i;
+    else {
+        return i;
+    }
+}
+bool is_fold(const std::string & line)
+{
+    return line[0] == '(' && line[2] == ')';
 }
 
-std::size_t parse_number(const std::string & line, std::size_t i)
+std::size_t parse_number_length(const std::string & line, std::size_t i)
 {
-    size_t count = 0;
+    std::size_t count = 0;
     while (i < line.size() && !std::isspace(line[i])) {
         i++;
         count++;
@@ -234,73 +241,74 @@ std::size_t parse_number(const std::string & line, std::size_t i)
     return count;
 }
 
-double left_fold(double current, const std::string & line)
+std::vector<std::string> parse_number(const std::string & line, std::size_t i)
 {
-    const auto old_current = current;
-    std::size_t i = 0;
-    std::size_t pos_binary_op = 1;
-    bool good;
-    const auto op = parse_op(line, pos_binary_op);
-    if ((arity(op) != 2) || (op == Op::SET)) {
-        std::cerr << "Left convolutional is work only binary opertion" << std::endl;
-        return current;
-    }
-    i = skip_brackets(line, i);
-    i = skip_ws(line, i);
-    if (i == line.size()) {
-        std::cerr << "No arguments" << std::endl;
-        return current;
-    }
+    std::vector<std::string> numbers;
     while (i < line.size()) {
-        const auto number_size = parse_number(line, i);
-        std::size_t pos = 0;
-        const auto arg = parse_arg(line.substr(i, number_size), pos, good);
-        if (!good) {
-            std::cerr << "Wrong arguments" << std::endl;
-            return old_current;
-        }
-        current = binary(op, current, arg, good);
-        if (!good) {
-            return old_current;
-        }
-        i += number_size;
         i = skip_ws(line, i);
+        auto number_length = parse_number_length(line, i);
+        // std::cout << "length" << number_length << " str: " << line.substr(i, number_length) << std::endl;
+        if (number_length != 0) {
+            numbers.push_back(line.substr(i, number_length));
+        }
+        i += number_length;
     }
-    return current;
+    return numbers;
 }
 
 double process_line(const double current, const std::string & line)
 {
-    if ((line[0] == '(') && (line[2] == ')')) {
-        return left_fold(current, line);
+    std::size_t i = 0;
+    const auto op = parse_op(line, i);
+    switch (arity(op)) {
+    case 2: {
+        auto res = current;
+        i = skip_brackets(line, i);
+        std::vector<std::string> numbers = parse_number(line, i);
+        if (numbers.empty()) {
+            std::cerr << "No argument for a binary operation" << std::endl;
+            return current;
+        }
+        bool good = true;
+        for (const auto & str_number : numbers) {
+            if (is_fold(line)) {
+                if (op == Op::SET) {
+                    std::cerr << "Wrong operation left fold" << std::endl;
+                    return current;
+                }
+            }
+            double arg;
+            // проверка для обхода пробельного бага в тесте : '+ 1 '
+            if (is_fold(line)) {
+                i = 0;
+                arg = parse_arg(str_number, i, good);
+            }
+            else {
+                i = skip_ws(line, i);
+                const auto old_i = i;
+                arg = parse_arg(line, i, good);
+                //также эта проверка только из-за теста, где для случая '+ -'и др. требуется два cerr: Parsing Err и No arguments
+                //хотя я думаю, что только ошибки парсинга было бы достаточно
+                if (i == old_i) {
+                    std::cerr << "No argument for a binary operation" << std::endl;
+                    return current;
+                }
+            }
+            res = binary(op, res, arg, good);
+            if (!good) {
+                return current;
+            }
+        }
+        return res;
     }
-    else {
-        std::size_t i = 0;
-        const auto op = parse_op(line, i);
-        switch (arity(op)) {
-        case 2: {
-            i = skip_ws(line, i);
-            const auto old_i = i;
-            bool good;
-            const auto arg = parse_arg(line, i, good);
-            if (i == old_i) {
-                std::cerr << "No argument for a binary operation" << std::endl;
-                break;
-            }
-            else if (i < line.size()) {
-                break;
-            }
-            return binary(op, current, arg, good);
+    case 1: {
+        if (i < line.size()) {
+            std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
+            break;
         }
-        case 1: {
-            if (i < line.size()) {
-                std::cerr << "Unexpected suffix for a unary operation: '" << line.substr(i) << "'" << std::endl;
-                break;
-            }
-            return unary(current, op);
-        }
-        default: break;
-        }
-        return current;
+        return unary(current, op);
     }
+    default: break;
+    }
+    return current;
 }

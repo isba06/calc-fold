@@ -42,8 +42,25 @@ std::size_t arity(const Op op)
     return 0;
 }
 
-Op parse_op(const std::string & line, std::size_t & i)
+std::string delete_brackets(const std::string & line)
 {
+    if (line[0] == '(') {
+        for (std::size_t i = 0; i < line.size(); i++) {
+            if (line[i] == ')') {
+                return line.substr(1, i - 1) + line.substr(i + 1, line.size() - i + 1);
+            }
+            if(std::isspace(line[i])){
+              return line;
+            }
+        }
+        return line;
+    }
+    return line;
+}
+
+Op parse_op(const std::string & line_raw, std::size_t & i)
+{
+    std::string line = delete_brackets(line_raw);
     const auto rollback = [&i, &line](const std::size_t n) {
         i -= n;
         std::cerr << "Unknown operation " << line << std::endl;
@@ -62,13 +79,6 @@ Op parse_op(const std::string & line, std::size_t & i)
     case '9':
         --i; // a first digit is a part of op's argument
         return Op::SET;
-    case '(':
-        if (line[2] == ')') {
-            return parse_op(line, i);
-        }
-        else {
-            rollback(1);
-        }
     case '+':
         return Op::ADD;
     case '-':
@@ -217,12 +227,24 @@ double binary(const Op op, const double left, const double right, bool & good)
 
 std::size_t skip_brackets(const std::string & line, std::size_t i)
 {
-    if (line[0] == '(' && line[2] == ')') {
-        return 3;
+    const auto old_i = i;
+    if (line[0] == '(') {
+        for (; i < line.size(); i++) {
+            if (line[i] == ')') {
+                return ++i;
+            }
+        }
+        return old_i;
     }
-    else {
+    else
+        return old_i;
+    /*
+    if (line[i] == ')') {
+        return ++i;
+    }
+    else
         return i;
-    }
+        */
 }
 
 bool is_fold(const std::string & line)
@@ -272,10 +294,12 @@ double process_line(const double current, const std::string & line)
 {
     std::size_t i = 0;
     const auto op = parse_op(line, i);
+    //std::cout << delete_brackets(line) << std::endl;
     switch (arity(op)) {
     case 2: {
         auto res = current;
         i = skip_brackets(line, i);
+        // std::cout << "i: " << i << std::endl;
         std::vector<std::string> numbers = parse_number(line, i);
         bool good = true;
         for (const auto & str_number : numbers) {

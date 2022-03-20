@@ -215,8 +215,6 @@ double binary(const Op op, const double left, const double right, bool & good)
     }
 }
 
-} // anonymous namespace
-
 std::size_t skip_brackets(const std::string & line, std::size_t i)
 {
     if (line[0] == '(' && line[2] == ')') {
@@ -226,9 +224,19 @@ std::size_t skip_brackets(const std::string & line, std::size_t i)
         return i;
     }
 }
+
 bool is_fold(const std::string & line)
 {
-    return line[0] == '(' && line[2] == ')';
+    if (line[0] == '(') {
+        for (const auto & ch : line) {
+            if (ch == ')') {
+                return true;
+            }
+        }
+        return false;
+    }
+    else
+        return false;
 }
 
 std::size_t parse_number_length(const std::string & line, std::size_t i)
@@ -247,14 +255,18 @@ std::vector<std::string> parse_number(const std::string & line, std::size_t i)
     while (i < line.size()) {
         i = skip_ws(line, i);
         auto number_length = parse_number_length(line, i);
-        // std::cout << "length" << number_length << " str: " << line.substr(i, number_length) << std::endl;
         if (number_length != 0) {
             numbers.push_back(line.substr(i, number_length));
         }
         i += number_length;
     }
+    if (numbers.empty()) {
+        std::cerr << "No argument for a binary operation" << std::endl;
+    }
     return numbers;
 }
+
+} // anonymous namespace
 
 double process_line(const double current, const std::string & line)
 {
@@ -265,21 +277,15 @@ double process_line(const double current, const std::string & line)
         auto res = current;
         i = skip_brackets(line, i);
         std::vector<std::string> numbers = parse_number(line, i);
-        if (numbers.empty()) {
-            std::cerr << "No argument for a binary operation" << std::endl;
-            return current;
-        }
         bool good = true;
         for (const auto & str_number : numbers) {
+            double arg;
+            // проверка для обхода пробельного бага в тесте : '+ 1 '
             if (is_fold(line)) {
                 if (op == Op::SET) {
                     std::cerr << "Wrong operation left fold" << std::endl;
                     return current;
                 }
-            }
-            double arg;
-            // проверка для обхода пробельного бага в тесте : '+ 1 '
-            if (is_fold(line)) {
                 i = 0;
                 arg = parse_arg(str_number, i, good);
             }

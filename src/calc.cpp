@@ -49,8 +49,8 @@ std::string delete_brackets(const std::string & line)
             if (line[i] == ')') {
                 return line.substr(1, i - 1) + line.substr(i + 1, line.size() - i + 1);
             }
-            if(std::isspace(line[i])){
-              return line;
+            if (std::isspace(line[i])) {
+                return line;
             }
         }
         return line;
@@ -238,13 +238,6 @@ std::size_t skip_brackets(const std::string & line, std::size_t i)
     }
     else
         return old_i;
-    /*
-    if (line[i] == ')') {
-        return ++i;
-    }
-    else
-        return i;
-        */
 }
 
 bool is_fold(const std::string & line)
@@ -294,12 +287,10 @@ double process_line(const double current, const std::string & line)
 {
     std::size_t i = 0;
     const auto op = parse_op(line, i);
-    //std::cout << delete_brackets(line) << std::endl;
     switch (arity(op)) {
     case 2: {
         auto res = current;
         i = skip_brackets(line, i);
-        // std::cout << "i: " << i << std::endl;
         std::vector<std::string> numbers = parse_number(line, i);
         bool good = true;
         for (const auto & str_number : numbers) {
